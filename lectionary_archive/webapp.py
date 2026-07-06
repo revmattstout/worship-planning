@@ -11,10 +11,12 @@ import html
 import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import db
 from search import run_search
+
+PAGE_SIZE = 50
 
 PAGE_TEMPLATE = """<!doctype html>
 <html lang="en">
@@ -33,6 +35,9 @@ PAGE_TEMPLATE = """<!doctype html>
   .snippet {{ margin: 0.5rem 0; }}
   mark {{ background: #ffe58a; }}
   .count {{ color: #666; margin-bottom: 1rem; }}
+  .pagination {{ display: flex; justify-content: space-between; margin-top: 1.5rem; }}
+  .pagination a {{ padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; text-decoration: none; color: #222; }}
+  .pagination a:hover {{ background: #f0f0f0; }}
 </style>
 </head>
 <body>
@@ -57,18 +62,38 @@ PAGE_TYPES = [
 ]
 
 
-def render_results(conn, query, page_type):
+def pagination_link(query, page_type, page):
+    qs = urlencode({"q": query or "", "type": page_type or "", "page": page})
+    return f"/?{qs}"
+
+
+def render_pagination(query, page_type, page, has_prev, has_next):
+    if not has_prev and not has_next:
+        return ""
+    left = f'<a href="{pagination_link(query, page_type, page - 1)}">&larr; Previous</a>' if has_prev else "<span></span>"
+    right = f'<a href="{pagination_link(query, page_type, page + 1)}">Next &rarr;</a>' if has_next else "<span></span>"
+    return f'<div class="pagination">{left}{right}</div>'
+
+
+def render_results(conn, query, page_type, page=1):
     if not query and not page_type:
         return ""
+    offset = (page - 1) * PAGE_SIZE
     try:
-        rows = run_search(conn, query or None, page_type=page_type or None, limit=50)
+        # fetch one extra row so we know whether a "Next" page exists
+        rows = run_search(conn, query or None, page_type=page_type or None, limit=PAGE_SIZE + 1, offset=offset)
     except sqlite3.OperationalError as exc:
         return f"<p>Query error: {html.escape(str(exc))}</p>"
 
-    if not rows:
-        return "<p class='count'>No results.</p>"
+    has_next = len(rows) > PAGE_SIZE
+    rows = rows[:PAGE_SIZE]
 
-    parts = [f"<p class='count'>{len(rows)} result(s)</p>"]
+    if not rows:
+        return "<p class='count'>No results.</p>" if page == 1 else "<p class='count'>No more results.</p>"
+
+    start = offset + 1
+    end = offset + len(rows)
+    parts = [f"<p class='count'>Results {start}–{end}</p>"]
     for title, series_name, liturgical_name, ptype, sunday_date, scripture, url, snip in rows:
         snip_html = snip.replace("[", "<mark>").replace("]", "</mark>") if snip else ""
         parts.append(f"""
@@ -80,6 +105,7 @@ def render_results(conn, query, page_type):
           <div class="snippet">{snip_html}</div>
         </div>
         """)
+    parts.append(render_pagination(query, page_type, page, has_prev=page > 1, has_next=has_next))
     return "\n".join(parts)
 
 
@@ -91,6 +117,10 @@ class Handler(BaseHTTPRequestHandler):
         params = parse_qs(parsed.query)
         query = params.get("q", [""])[0]
         page_type = params.get("type", [""])[0]
+        try:
+            page = max(1, int(params.get("page", ["1"])[0]))
+        except ValueError:
+            page = 1
 
         if not Path(self.db_path).exists():
             self.send_response(200)
@@ -105,7 +135,7 @@ class Handler(BaseHTTPRequestHandler):
 
         conn = sqlite3.connect(self.db_path)
         try:
-            results_html = render_results(conn, query, page_type)
+            results_html = render_results(conn, query, page_type, page)
         finally:
             conn.close()
 

@@ -15,7 +15,7 @@ import sqlite3
 import db
 
 
-def run_search(conn, query, page_type=None, scripture=None, after=None, before=None, series=None, limit=20):
+def run_search(conn, query, page_type=None, scripture=None, after=None, before=None, series=None, limit=20, offset=0):
     where = []
     params = []
 
@@ -46,9 +46,10 @@ def run_search(conn, query, page_type=None, scripture=None, after=None, before=N
         FROM search_index
         WHERE {where_clause}
         ORDER BY {order}
-        LIMIT ?
+        LIMIT ? OFFSET ?
     """
     params.append(limit)
+    params.append(offset)
     return conn.execute(sql, params).fetchall()
 
 
@@ -61,6 +62,7 @@ def main():
     parser.add_argument("--after", help="only entries on/after this date (YYYY-MM-DD)")
     parser.add_argument("--before", help="only entries on/before this date (YYYY-MM-DD)")
     parser.add_argument("--limit", type=int, default=20)
+    parser.add_argument("--offset", type=int, default=0, help="skip this many results (for paging through more than --limit)")
     parser.add_argument("--db", default=str(db.DEFAULT_DB_PATH))
     args = parser.parse_args()
 
@@ -69,7 +71,8 @@ def main():
 
     conn = sqlite3.connect(args.db)
     try:
-        rows = run_search(conn, args.query, args.page_type, args.scripture, args.after, args.before, args.series, args.limit)
+        rows = run_search(conn, args.query, args.page_type, args.scripture, args.after, args.before, args.series,
+                           args.limit, args.offset)
     except sqlite3.OperationalError as exc:
         print(f"query error: {exc}")
         return
