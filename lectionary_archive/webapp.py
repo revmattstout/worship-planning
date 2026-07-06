@@ -10,6 +10,7 @@ import argparse
 import html
 import sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 import db
@@ -90,6 +91,17 @@ class Handler(BaseHTTPRequestHandler):
         params = parse_qs(parsed.query)
         query = params.get("q", [""])[0]
         page_type = params.get("type", [""])[0]
+
+        if not Path(self.db_path).exists():
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            msg = (
+                f"<p>No database found at <code>{html.escape(self.db_path)}</code>.</p>"
+                "<p>Run <code>python scraper.py</code> first to build it, then reload this page.</p>"
+            )
+            self.wfile.write(PAGE_TEMPLATE.format(query="", type_options="", results=msg).encode("utf-8"))
+            return
 
         conn = sqlite3.connect(self.db_path)
         try:
