@@ -52,6 +52,36 @@ python scraper.py --refresh                   # re-fetch everything, ignore cach
 
 The database is written to `data/lectionary.db`.
 
+## A real double-clickable app (macOS)
+
+`mac_app/` has AppleScript sources for two tiny real macOS apps: one starts
+the search server and opens it in your browser, the other stops it. Unlike
+`Launch Lectionary Search.command`, these behave like normal apps -- no
+Terminal window, and you can drag them anywhere on the Dock (including the
+apps side, left of the divider).
+
+These have to be compiled on your own Mac (there's no way to build a macOS
+app bundle from anywhere else). One-time setup:
+
+1. Confirm the path in both `.applescript` files matches where you actually
+   cloned this repo -- they assume
+   `/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive`.
+   Edit the `appDir` line in each file if yours is different.
+2. Compile them:
+
+   ```
+   cd ~/Documents/GitHub/worship-planning/lectionary_archive/mac_app
+   osacompile -o "Lectionary Search.app" "Lectionary Search.applescript"
+   osacompile -o "Stop Lectionary Search.app" "Stop Lectionary Search.applescript"
+   ```
+3. Drag both `.app` files (in Finder, from the `mac_app` folder) onto your
+   Dock, or into `/Applications`, wherever is convenient.
+
+Double-click **Lectionary Search** to start the server and open the search
+page. Double-click **Stop Lectionary Search** when you're done (it shows a
+quick notification either way). Output/errors from the server go to
+`webapp.log` in this folder if you ever need to check on it.
+
 ## Keeping it up to date automatically (macOS)
 
 `scraper.py` is safe to re-run any time -- it only fetches weeks it hasn't

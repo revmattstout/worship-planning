@@ -1,3 +1,6 @@
 data/
 __pycache__/
 *.pyc
+mac_app/*.app
+webapp.log
+scraper.log
