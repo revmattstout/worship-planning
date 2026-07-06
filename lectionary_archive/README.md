@@ -52,6 +52,45 @@ python scraper.py --refresh                   # re-fetch everything, ignore cach
 
 The database is written to `data/lectionary.db`.
 
+## Keeping it up to date automatically (macOS)
+
+`scraper.py` is safe to re-run any time -- it only fetches weeks it hasn't
+seen before, so repeat runs are fast. `com.umcdiscipleship.lectionary-scraper.plist`
+is a `launchd` job (macOS's built-in scheduler) that re-runs it every Sunday
+at 6:00 AM.
+
+**One-time setup:**
+
+1. Confirm your Python path matches the plist. Run `which python3` in
+   Terminal -- if it doesn't print `/usr/bin/python3`, edit the `.plist`
+   file and replace `/usr/bin/python3` with whatever `which python3` printed.
+2. Also double-check the file paths in the `.plist` match where you actually
+   cloned this repo (they assume
+   `/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive`).
+3. Copy it into place and load it:
+
+   ```
+   cp com.umcdiscipleship.lectionary-scraper.plist ~/Library/LaunchAgents/
+   launchctl load ~/Library/LaunchAgents/com.umcdiscipleship.lectionary-scraper.plist
+   ```
+
+That's it -- it'll now run automatically every Sunday morning, even if
+Terminal isn't open (as long as your Mac is on). Check `scraper.log` in this
+folder afterward to confirm it ran.
+
+**Useful commands:**
+
+```
+# run it right now instead of waiting for Sunday
+launchctl start com.umcdiscipleship.lectionary-scraper
+
+# stop the schedule
+launchctl unload ~/Library/LaunchAgents/com.umcdiscipleship.lectionary-scraper.plist
+
+# turn it back on
+launchctl load ~/Library/LaunchAgents/com.umcdiscipleship.lectionary-scraper.plist
+```
+
 ## Search
 
 Command line:
