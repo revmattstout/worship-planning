@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lectionary Archive Search</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+  form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+  input[type=text] { flex: 1; min-width: 200px; padding: 0.5rem; font-size: 1rem; }
+  select { padding: 0.5rem; }
+  button { padding: 0.5rem 1rem; }
+  .result { border-bottom: 1px solid #ddd; padding: 1rem 0; }
+  .result h3 { margin: 0 0 0.25rem 0; }
+  .meta { color: #666; font-size: 0.9rem; }
+  .snippet { margin: 0.5rem 0; }
+  mark { background: #ffe58a; }
+  .count { color: #666; margin-bottom: 1rem; }
+  .pagination { display: flex; justify-content: space-between; margin-top: 1.5rem; }
+  .pagination a { padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; text-decoration: none; color: #222; cursor: pointer; }
+  .pagination a:hover { background: #f0f0f0; }
+  .status { color: #666; }
+</style>
+</head>
+<body>
+<h1>Lectionary Archive Search</h1>
+<form id="search-form">
+  <input type="text" id="q" placeholder="Search topic, e.g. forgiveness, baptism, grief...">
+  <select id="type">
+    <option value="">All page types</option>
+    <option value="planning_worship">planning_worship</option>
+    <option value="preaching_notes">preaching_notes</option>
+    <option value="liturgical_resources">liturgical_resources</option>
+    <option value="hymn_suggestions">hymn_suggestions</option>
+    <option value="music_notes">music_notes</option>
+    <option value="offertory_prayer">offertory_prayer</option>
+    <option value="youth_lessons">youth_lessons</option>
+    <option value="childrens_message">childrens_message</option>
+    <option value="small_groups">small_groups</option>
+    <option value="graphics">graphics</option>
+  </select>
+  <button type="submit">Search</button>
+</form>
+<div id="output"><p class="status">Loading archive...</p></div>
+
+<script>
+const PAGE_SIZE = 50;
+let DOCS = [];
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function tokenize(s) {
+  return (s.toLowerCase().match(/[a-z0-9]+/g) || []);
+}
+
+function countOccurrences(haystack, needle) {
+  if (!needle) return 0;
+  let count = 0, pos = 0;
+  while ((pos = haystack.indexOf(needle, pos)) !== -1) { count++; pos += needle.length; }
+  return count;
+}
+
+// All query terms must appear somewhere in title+body (mirrors FTS5's
+// default implicit-AND behavior for multi-word queries); score favors
+// title matches and higher term frequency.
+function scoreDoc(doc, terms) {
+  let score = 0;
+  for (const term of terms) {
+    const titleCount = countOccurrences(doc._titleLower, term);
+    const bodyCount = countOccurrences(doc._bodyLower, term);
+    if (titleCount === 0 && bodyCount === 0) return 0;
+    score += titleCount * 5 + bodyCount;
+  }
+  return score;
+}
+
+function highlight(escapedText, terms) {
+  let result = escapedText;
+  for (const term of terms) {
+    if (!term) continue;
+    result = result.replace(new RegExp("(" + escapeRegExp(term) + ")", "gi"), "<mark>$1</mark>");
+  }
+  return result;
+}
+
+function makeSnippet(doc, terms) {
+  const body = doc.body;
+  let idx = -1;
+  for (const term of terms) {
+    const i = doc._bodyLower.indexOf(term);
+    if (i !== -1 && (idx === -1 || i < idx)) idx = i;
+  }
+  let start, text;
+  if (idx === -1) {
+    start = 0;
+    text = body.slice(0, 220);
+  } else {
+    start = Math.max(0, idx - 80);
+    text = body.slice(start, start + 220);
+  }
+  if (start > 0) text = "..." + text;
+  if (start + 220 < body.length) text = text + "...";
+  return highlight(escapeHtml(text), terms);
+}
+
+function runSearch(query, type) {
+  const terms = tokenize(query);
+  let results = DOCS;
+  if (type) results = results.filter(d => d.type === type);
+  if (terms.length) {
+    results = results
+      .map(d => ({ doc: d, score: scoreDoc(d, terms) }))
+      .filter(r => r.score > 0)
+      .sort((a, b) => b.score - a.score || (a.doc.date < b.doc.date ? 1 : -1))
+      .map(r => r.doc);
+  } else {
+    results = results.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+  }
+  return { results, terms };
+}
+
+function getState() {
+  const params = new URLSearchParams(location.search);
+  return {
+    q: params.get("q") || "",
+    type: params.get("type") || "",
+    page: Math.max(1, parseInt(params.get("page") || "1", 10) || 1),
+  };
+}
+
+function pushState(state, replace) {
+  const params = new URLSearchParams();
+  if (state.q) params.set("q", state.q);
+  if (state.type) params.set("type", state.type);
+  if (state.page > 1) params.set("page", state.page);
+  const url = "?" + params.toString();
+  if (replace) history.replaceState(state, "", url || location.pathname);
+  else history.pushState(state, "", url || location.pathname);
+}
+
+function render(state) {
+  const output = document.getElementById("output");
+  document.getElementById("q").value = state.q;
+  document.getElementById("type").value = state.type;
+
+  if (!state.q && !state.type) {
+    output.innerHTML = `<p class="status">Searching ${DOCS.length.toLocaleString()} entries. Type a topic above.</p>`;
+    return;
+  }
+
+  const { results, terms } = runSearch(state.q, state.type);
+  if (!results.length) {
+    output.innerHTML = "<p class='count'>No results.</p>";
+    return;
+  }
+
+  const offset = (state.page - 1) * PAGE_SIZE;
+  const pageResults = results.slice(offset, offset + PAGE_SIZE);
+  if (!pageResults.length) {
+    output.innerHTML = "<p class='count'>No more results.</p>";
+    return;
+  }
+
+  const start = offset + 1;
+  const end = offset + pageResults.length;
+  let html = `<p class="count">Results ${start}–${end} of ${results.length}</p>`;
+
+  for (const doc of pageResults) {
+    const snip = terms.length ? makeSnippet(doc, terms) : escapeHtml(doc.body.slice(0, 220)) + "...";
+    html += `
+      <div class="result">
+        <h3><a href="${escapeHtml(doc.url)}" target="_blank" rel="noopener">${escapeHtml(doc.title)}</a></h3>
+        <div class="meta">${escapeHtml(doc.date)} &middot; ${escapeHtml(doc.series)} &mdash;
+          ${escapeHtml(doc.liturgical)} &middot; <em>${escapeHtml(doc.type)}</em></div>
+        ${doc.scripture ? `<div class="meta">Scripture: ${escapeHtml(doc.scripture)}</div>` : ""}
+        <div class="snippet">${snip}</div>
+      </div>`;
+  }
+
+  const hasPrev = state.page > 1;
+  const hasNext = end < results.length;
+  if (hasPrev || hasNext) {
+    html += '<div class="pagination">';
+    html += hasPrev ? `<a href="#" data-page="${state.page - 1}">&larr; Previous</a>` : "<span></span>";
+    html += hasNext ? `<a href="#" data-page="${state.page + 1}">Next &rarr;</a>` : "<span></span>";
+    html += "</div>";
+  }
+
+  output.innerHTML = html;
+  output.querySelectorAll("[data-page]").forEach(a => {
+    a.addEventListener("click", e => {
+      e.preventDefault();
+      const newState = { ...state, page: parseInt(a.dataset.page, 10) };
+      pushState(newState, false);
+      render(newState);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+}
+
+document.getElementById("search-form").addEventListener("submit", e => {
+  e.preventDefault();
+  const state = {
+    q: document.getElementById("q").value.trim(),
+    type: document.getElementById("type").value,
+    page: 1,
+  };
+  pushState(state, false);
+  render(state);
+});
+
+window.addEventListener("popstate", () => render(getState()));
+
+fetch("data.json")
+  .then(r => r.json())
+  .then(docs => {
+    DOCS = docs;
+    for (const d of DOCS) {
+      d._titleLower = d.title.toLowerCase();
+      d._bodyLower = d.body.toLowerCase();
+    }
+    render(getState());
+  })
+  .catch(err => {
+    document.getElementById("output").innerHTML =
+      `<p class="status">Couldn't load data.json (${escapeHtml(String(err))}). ` +
+      `Make sure export_static.py has been run and data.json was committed alongside index.html.</p>`;
+  });
+</script>
+</body>
+</html>

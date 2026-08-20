@@ -159,3 +159,44 @@ page on umcdiscipleship.org.
 
 Re-running `scraper.py` later will pick up newly published weeks without
 re-fetching everything else.
+
+## Publishing a public, browser-only version (GitHub Pages)
+
+GitHub Pages only serves static files -- no Python, no live SQLite queries --
+so `docs/index.html` is a from-scratch client-side version: it fetches
+`docs/data.json` (a flat export of everything in `search_index`) once when
+the page loads, then does searching, filtering, snippet highlighting, and
+pagination entirely in JavaScript in the visitor's browser. Same look, same
+core features (topic search, page-type filter, 50-per-page results with
+Previous/Next) as `webapp.py`, just no server required.
+
+**Heads up:** this makes the archive's content -- the actual scraped text,
+not just links to it -- visible to anyone with the URL, even though the
+GitHub repo itself is private. GitHub Pages doesn't inherit a repo's privacy
+on the free plan. Only do this if you're fine with that.
+
+**Generate the data file** (run this on your Mac, after `scraper.py` has
+built `data/lectionary.db`):
+
+```
+cd lectionary_archive
+python3 export_static.py
+```
+
+This writes `docs/data.json`. Re-run it any time you want the published
+site to reflect newly-scraped content, then commit and push both
+`docs/data.json` and any changes.
+
+**Turn on GitHub Pages** (one-time, in the browser):
+
+1. On GitHub, go to your repo -> **Settings** -> **Pages**.
+2. Under "Build and deployment", set **Source** to "Deploy from a branch".
+3. Set **Branch** to `claude/lectionary-searchable-database-vzdgnx` (or
+   whichever branch you're using) and the folder to **/docs**.
+4. Save. GitHub will give you a URL like
+   `https://<your-username>.github.io/worship-planning/` -- it can take a
+   minute or two to go live the first time, and re-deploys automatically a
+   minute or so after every push that touches `docs/`.
+
+To update the published site later: re-run `export_static.py`, then
+`git add docs/data.json && git commit -m "update archive" && git push`.
