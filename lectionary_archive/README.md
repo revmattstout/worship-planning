@@ -84,20 +84,32 @@ quick notification either way). Output/errors from the server go to
 
 ## Keeping it up to date automatically (macOS)
 
-`scraper.py` is safe to re-run any time -- it only fetches weeks it hasn't
-seen before, so repeat runs are fast. `com.umcdiscipleship.lectionary-scraper.plist`
-is a `launchd` job (macOS's built-in scheduler) that re-runs it every Sunday
-at 6:00 AM.
+`update_and_publish.sh` runs the full weekly refresh in one shot: crawl for
+new lectionary weeks (`scraper.py`, safe to re-run any time -- it only
+fetches weeks it hasn't seen before), rebuild the static export
+(`export_static.py`), and -- if anything actually changed --
+`git commit` and `git push` `docs/data.json` so the GitHub Pages site
+updates itself too. If nothing changed, it does nothing (no empty commits).
+
+`com.umcdiscipleship.lectionary-scraper.plist` is a `launchd` job (macOS's
+built-in scheduler) that runs this script every Sunday at 6:00 AM.
 
 **One-time setup:**
 
-1. Confirm your Python path matches the plist. Run `which python3` in
-   Terminal -- if it doesn't print `/usr/bin/python3`, edit the `.plist`
-   file and replace `/usr/bin/python3` with whatever `which python3` printed.
-2. Also double-check the file paths in the `.plist` match where you actually
-   cloned this repo (they assume
+1. Confirm your Python path. Run `which python3` in Terminal -- if it
+   doesn't print `/usr/bin/python3`, edit `update_and_publish.sh` and change
+   the `python3` calls to the full path `which python3` printed (launchd
+   jobs use a minimal PATH that may not match your Terminal's).
+2. Confirm `git push` works without being prompted for a password when you
+   run it by hand in Terminal (i.e. you've already got a credential helper
+   or an unlocked SSH key set up). A scheduled job can't type a password for
+   you -- if it's not already passwordless, run `git push` manually once and
+   follow whatever prompts your Mac gives you to save the credential, then
+   confirm a second `git push` doesn't ask again.
+3. Double-check the file paths in the `.plist` and in `update_and_publish.sh`
+   match where you actually cloned this repo (they assume
    `/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive`).
-3. Copy it into place and load it:
+4. Copy the job into place and load it:
 
    ```
    cp com.umcdiscipleship.lectionary-scraper.plist ~/Library/LaunchAgents/
@@ -105,8 +117,10 @@ at 6:00 AM.
    ```
 
 That's it -- it'll now run automatically every Sunday morning, even if
-Terminal isn't open (as long as your Mac is on). Check `scraper.log` in this
-folder afterward to confirm it ran.
+Terminal isn't open (as long as your Mac is on), and your GitHub Pages site
+will reflect newly-published lectionary content within a few minutes after.
+Check `update.log` in this folder afterward to confirm it ran (and to see
+`PUSH FAILED` if step 2 above wasn't actually passwordless).
 
 **Useful commands:**
 

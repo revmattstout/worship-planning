@@ -7,19 +7,17 @@
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>/usr/bin/python3</string>
-		<string>/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive/scraper.py</string>
-		<string>--delay</string>
-		<string>1.5</string>
+		<string>/bin/bash</string>
+		<string>/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive/update_and_publish.sh</string>
 	</array>
 
 	<key>WorkingDirectory</key>
 	<string>/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive</string>
 
 	<key>StandardOutPath</key>
-	<string>/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive/scraper.log</string>
+	<string>/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive/update.log</string>
 	<key>StandardErrorPath</key>
-	<string>/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive/scraper.log</string>
+	<string>/Users/mattstout/Documents/GitHub/worship-planning/lectionary_archive/update.log</string>
 
 	<!-- Runs every Sunday at 6:00 AM. To run daily instead, delete the
 	     Weekday key below and keep only Hour/Minute. -->
