@@ -1,6 +1,7 @@
-data/
+data/html_cache/
 __pycache__/
 *.pyc
 mac_app/*.app
 webapp.log
 scraper.log
+update.log
